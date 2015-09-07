@@ -18,7 +18,7 @@ type: dispochat.py
 
 A demon implementing the websocket protocol will start listening to port 9000
 
-Use the javascript/html5 client named index.html
+Use the javascript/html5 client named index.html written with Bootstrap and Jquery
 ||-------------------------------------------------------------------------------------------------------------------||
 
 
