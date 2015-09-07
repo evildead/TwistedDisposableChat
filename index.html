@@ -1,0 +1,399 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+    <meta name="description" content="This is a simple chat based on websockets and written in Twisted Python (with the Autobahn websocket extension)"/>
+    <meta name="author" content="Danilo Carrabino"/>
+    <!--[if IE]>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <![endif]-->
+    <title>BOOTSTRAP CLIENT FOR TWISTED DISPOSABLE CHAT</title>
+    <!-- BOOTSTRAP CORE STYLE CSS -->
+    <link href="assets/css/bootstrap.css" rel="stylesheet"/>
+    <link href="assets/css/customstyle.css" rel="stylesheet"/>
+
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <script src="assets/js/jquery.min.js"></script>
+    <script src="assets/js/bootstrap.min.js"></script>
+    <!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+    <script src="assets/js/ie10-viewport-bug-workaround.js"></script>
+
+    <script type="text/javascript">
+    var sock = null;
+    var ellog = null;
+    var elbroadcastmsg = null;
+    var myIdentity = null;
+    var myClientList = {};
+
+    window.onload = function() {
+        var wsuri;
+        var wsport = "9000";
+        ellog = document.getElementById('log');
+        elbroadcastmsg = document.getElementById('broadcastmsg');
+
+        parsedParams = searchParamsParse();
+        if('wsport' in parsedParams) {
+            wsport = parsedParams['wsport'];
+        }
+
+        if (window.location.protocol === "file:") {
+            wsuri = "ws://localhost:" + wsport;
+        }
+        else {
+            wsuri = "ws://" + window.location.hostname + ":" + wsport;
+        }
+
+        if ("WebSocket" in window) {
+            sock = new WebSocket(wsuri);
+        }
+        else if ("MozWebSocket" in window) {
+            sock = new MozWebSocket(wsuri);
+        }
+        else {
+            log("Browser does not support WebSocket!");
+            window.location = "http://autobahn.ws/unsupportedbrowser";
+        }
+
+        if (sock) {
+            sock.onopen = function() {
+                log("Connected to " + wsuri);
+            }
+
+            sock.onclose = function(e) {
+                log("Connection closed (wasClean = " + e.wasClean + ", code = " + e.code + ", reason = '" + e.reason + "')");
+                sock = null;
+            }
+
+            sock.onmessage = function(e) {
+                var myData = JSON.parse(e.data);
+
+                if(myData['eventtype'] == 'identity') {
+                    myIdentity = myData['identity'];
+                    $("#navtext").text('YOU ARE: ' + myIdentity['name']);
+                }
+                else if(myData['eventtype'] == 'clist') {
+                    manageNewClientList(myData['clientlist']);
+                }
+                else if(myData['eventtype'] == 'btxt') {
+                    writebroadcastMessage(myData['msgcontent'], myData['fromclientkey']);
+                }
+                else if(myData['eventtype'] == 'txt') {
+                    writeprivateMessage(myData['msgcontent'], myData['fromclientkey'], myData['fromclientkey']);
+                }
+            }
+        }
+    };
+
+    function searchParamsParse() {
+        var searchParamsObj = {};
+        var tmp = [];
+        window.location.search.substr(1).split("&")
+        .forEach(function (item) {
+            if(item.length > 0) {
+                tmp = item.split("=");
+                searchParamsObj[tmp[0]] = decodeURIComponent(tmp[1]);
+            }
+        });
+
+        return searchParamsObj;
+    }
+
+    $(function() {
+        $(".container").on("click", "#broadcastsendbtn", function(e) {
+            broadcast();
+        });
+    });
+
+    function broadcast() {
+        var msg = document.getElementById('broadcastmessagetext').value;
+        if (sock) {
+            objToSend = {};
+            objToSend['eventtype'] = 'btxt';
+            objToSend['msgcontent'] = msg;
+            objToSend['fromclientkey'] = myIdentity['key'];
+            sock.send(JSON.stringify(objToSend));
+            log("You sent in broadcast: " + msg);
+            document.getElementById('broadcastmessagetext').value = '';
+        } else {
+            log("Not connected.");
+        }
+    };
+
+    function sendToGuest(guestId) {
+        var msg = document.getElementById('broadcastmessagetext_' + guestId).value;
+        if (sock) {
+            objToSend = {};
+            objToSend['eventtype'] = 'txt';
+            objToSend['msgcontent'] = msg;
+            objToSend['toclientkey'] = guestId;
+            objToSend['fromclientkey'] = myIdentity['key'];
+            sock.send(JSON.stringify(objToSend));
+            writeprivateMessage(msg, myIdentity['key'], guestId);
+            log("You sent: " + msg + " to " + guestId);
+            document.getElementById('broadcastmessagetext_' + guestId).value = '';
+        } else {
+            log("Not connected.");
+        }
+    };
+
+    function log(m) {
+        ellog.innerHTML += m + '\n';
+        ellog.scrollTop = ellog.scrollHeight;
+    };
+
+    function writebroadcastMessage(m, senderId) {
+        var imageName = 'guest_default.png';
+        var senderName = myClientList[senderId];
+        if(senderId == myIdentity['key']) {
+            senderName = myIdentity['name'];
+            imageName = 'user_default.png';
+        }
+        var liToAppend = '<li class="media"><div class="media-body"><div class="media"><a class="pull-left" href="#"><img class="media-object img-circle " style="max-height:40px;" src="assets/img/' + imageName + '"/></a><div class="media-body">' + m + '<br/><small class="text-muted">' + senderName + '</small><hr/></div></div></div></li>';
+        $("#broadcastmsg ul").append(liToAppend);
+        $("#broadcastmsg").animate({scrollTop: $("#broadcastmsg")[0].scrollHeight}, 1000);
+    };
+
+    function writeprivateMessage(m, senderId, guestId) {
+        var imageName = 'guest_default.png';
+        var senderName = myClientList[senderId];
+        if(senderId == myIdentity['key']) {
+            senderName = myIdentity['name'];
+            imageName = 'user_default.png';
+        }
+        var liToAppend = '<li class="media"><div class="media-body"><div class="media"><a class="pull-left" href="#"><img class="media-object img-circle " style="max-height:40px;" src="assets/img/' + imageName + '"/></a><div class="media-body">' + m + '<br/><small class="text-muted">' + senderName + '</small><hr/></div></div></div></li>';
+        $("#chat_" + guestId).collapse('show')
+        $("#privatemsg_" + guestId + " ul").append(liToAppend);
+        $("#privatemsg_" + guestId).animate({scrollTop: $("#privatemsg_" + guestId)[0].scrollHeight}, 1000);
+    };
+
+    function createChatForGuest(guestId) {
+        var guestName = myClientList[guestId];
+        var liToAppend = '<li class="media" id="guest_' + guestId + '"><div class="media-body"><div class="media"><a class="pull-left" href="#"><img class="media-object img-circle" style="max-height:40px;" src="assets/img/guest_default.png"/></a><div class="media-body"><button type="button" class="btn btn-primary pull-right" data-toggle="collapse" data-target="#chat_' + guestId + '">SHOW/HIDE CHAT</button><h5>' + myClientList[guestId] + '</h5><small class="text-muted">Online user</small></div><div class="panel panel-default collapse" id="chat_' + guestId + '"><div class="panel-body scrollablefixedheightprivatechat" id="privatemsg_' + guestId + '"><ul class="media-list"></ul></div><div class="panel-footer"><div class="input-group"><input id="broadcastmessagetext_' + guestId + '" type="text" class="form-control" placeholder="Enter Message"/><span class="input-group-btn"><button id="broadcastsendbtn_' + guestId + '" onclick=\'sendToGuest(' + guestId + ');\' class="btn btn-info" type="button">PRIVATE SEND</button></span></div></div></div></div></div></li>';
+        $("#guestslist").append(liToAppend);
+        $("#guests").animate({scrollTop: $("#guests")[0].scrollHeight}, 1000);
+    };
+
+    function removeChatForGuest(guestId) {
+        $("#guest_" + guestId).remove();
+    };
+
+    function manageNewClientList(newClientList) {
+        var tmpGuestIdsAlreadyPresent = [];
+        var tmpGuestIdsInNewClientList = [];
+        var tmpGuestIdsToRemove = [];
+        var tmpGuestIdsToAdd = [];
+
+        for(var i in myClientList) {
+            tmpGuestIdsAlreadyPresent.push(i);
+        }
+
+        for(var k in newClientList) {
+            if(myIdentity['key'] != k) {
+                tmpGuestIdsInNewClientList.push(k);
+                if ($.inArray(k, tmpGuestIdsAlreadyPresent) == -1) {
+                    tmpGuestIdsToAdd.push(k);
+                }
+            }
+        }
+
+        for(var i in myClientList) {
+            if ($.inArray(i, tmpGuestIdsInNewClientList) == -1) {
+                tmpGuestIdsToRemove.push(i);
+            }
+        }
+
+        myClientList = {};
+        for(var k in newClientList) {
+            if(myIdentity['key'] != k) {
+                myClientList[k] = newClientList[k];
+            }
+        }
+
+        for(var i in tmpGuestIdsToRemove) {
+            removeChatForGuest(tmpGuestIdsToRemove[i]);
+        }
+
+        for(var i in tmpGuestIdsToAdd) {
+            createChatForGuest(tmpGuestIdsToAdd[i]);
+        }
+    };
+
+    </script>
+</head>
+<body style="font-family:Verdana">
+<nav class="navbar navbar-default" role="navigation">
+    <div class="navbar-header">
+        <a class="navbar-brand" href="#">DANILO TWISTED CHAT </a>
+    </div>
+    <div>
+        <p id="navtext" class="navbar-text"></p>
+    </div>
+    <div>
+        <img class="media-object img-circle " src="assets/img/user_default.png"/>
+    </div>
+</nav>
+<div class="container">
+    <div class="row " style="padding-top:40px;">
+        <div class="col-md-6">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    RECENT BROADCAST HISTORY
+                </div>
+                <div class="panel-body scrollablefixedheight" id="broadcastmsg">
+                    <ul class="media-list">
+                        <!--
+                        <li class="media">
+
+                            <div class="media-body">
+
+                                <div class="media">
+                                    <a class="pull-left" href="#">
+                                        <img class="media-object img-circle " src="assets/img/user_default.png"/>
+                                    </a>
+
+                                    <div class="media-body">
+                                        Donec sit amet ligula enim. Duis vel condimentum massa.
+
+                                        Donec sit amet ligula enim. Duis vel condimentum massa.Donec sit amet ligula
+                                        enim.
+                                        Duis vel condimentum massa.
+                                        Donec sit amet ligula enim. Duis vel condimentum massa.
+                                        <br/>
+                                        <small class="text-muted">Alex Deo | 23rd June at 5:00pm</small>
+                                        <hr/>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </li>
+                        -->
+
+                    </ul>
+                </div>
+                <div class="panel-footer">
+                    <div class="input-group">
+                        <input id="broadcastmessagetext" type="text" class="form-control" placeholder="Enter Message"/>
+                        <span class="input-group-btn">
+                            <button id="broadcastsendbtn" class="btn btn-info" type="button">BROADCAST SEND</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    ONLINE USERS
+                </div>
+                <div class="panel-body scrollablefixedheight" id="guests">
+                    <ul class="media-list" id="guestslist">
+                        <!--
+                        <li class="media">
+
+                            <div class="media-body">
+
+                                <div class="media">
+                                    <a class="pull-left" href="#">
+                                        <img class="media-object img-circle" style="max-height:40px;"
+                                             src="assets/img/user_default.png"/>
+                                    </a>
+
+                                    <div class="media-body">
+                                        <h5>Alex Deo | User </h5>
+
+                                        <small class="text-muted">Active From 3 hours</small>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </li>
+                        -->
+                        <!--
+                        <li class="media" id="guest_2345">
+
+                            <div class="media-body">
+
+                                <div class="media">
+                                    <a class="pull-left" href="#">
+                                        <img class="media-object img-circle" style="max-height:40px;"
+                                             src="assets/img/user_default.png"/>
+                                    </a>
+
+                                    <div class="media-body">
+                                        <button type="button" class="btn btn-primary pull-right" data-toggle="collapse" data-target="#chat_2345">SHOW/HIDE CHAT</button>
+                                        <h5>GUEST_NAME</h5>
+                                        <small class="text-muted">Online user</small>
+                                    </div>
+
+                                    <div class="panel panel-default collapse" id="chat_2345">
+                                        <div class="panel-body scrollablefixedheightprivatechat" id="privatemsg_2345">
+                                            <ul class="media-list">
+                                            </ul>
+                                        </div>
+                                        <div class="panel-footer">
+                                            <div class="input-group">
+                                                <input id="broadcastmessagetext_2345" type="text" class="form-control" placeholder="Enter Message"/>
+                                                <span class="input-group-btn">
+                                                    <button id="broadcastsendbtn_2345" class="btn btn-info" type="button">PRIVATE SEND</button>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </li>
+
+                        <li class="media" id="guest_6789">
+
+                            <div class="media-body">
+
+                                <div class="media">
+                                    <a class="pull-left" href="#">
+                                        <img class="media-object img-circle" style="max-height:40px;"
+                                             src="assets/img/user_default.png"/>
+                                    </a>
+
+                                    <div class="media-body">
+                                        <button type="button" class="btn btn-primary pull-right" data-toggle="collapse" data-target="#chat_6789">SHOW/HIDE CHAT</button>
+                                        <h5>GUEST_NAME</h5>
+                                        <small class="text-muted">Online user</small>
+                                    </div>
+
+                                    <div class="panel panel-default collapse" id="chat_6789">
+                                        <div class="panel-body scrollablefixedheightprivatechat" id="privatemsg_6789">
+                                            <ul class="media-list">
+                                            </ul>
+                                        </div>
+                                        <div class="panel-footer">
+                                            <div class="input-group">
+                                                <input id="broadcastmessagetext_6789" type="text" class="form-control" placeholder="Enter Message"/>
+                                                <span class="input-group-btn">
+                                                    <button id="broadcastsendbtn_6789" class="btn btn-info" type="button">PRIVATE SEND</button>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </li>
+                        -->
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<footer class="footer">
+    <div class="container">
+        <pre id="log" class="scrollablefooterfixedheight"></pre>
+    </div>
+</footer>
+
+</body>
+</html>

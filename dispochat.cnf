@@ -1,0 +1,9 @@
+{
+    "wsport":9000,
+    "redis_host":"localhost",
+    "redis_port":6379,
+    "redisclient_ttl":60,
+    "chat_pollingtime":50,
+    "redis_clients_key_prefix":"twistedchatclients",
+    "redis_channel_messages":"twistedchatmessages"
+}

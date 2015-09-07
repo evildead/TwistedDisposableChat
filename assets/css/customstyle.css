@@ -1,0 +1,14 @@
+.scrollablefixedheight {
+    height: 32em;
+    overflow-y: scroll;
+}
+
+.scrollablefixedheightprivatechat {
+    height: 10em;
+    overflow-y: scroll;
+}
+
+.scrollablefooterfixedheight {
+    height: 7em;
+    overflow-y: scroll;
+}
