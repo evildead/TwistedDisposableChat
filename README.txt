@@ -1,18 +1,34 @@
-To start the chat server:
+WHAT IS TWISTED "DISPOSABLE CHAT"
+
+Twisted "Disposable Chat"
+A simple chat built with the Twisted Python protocol.
+It enables the broadcasting of messages and the communication user-to-user.
+It enables a multi-node deploy of the chat server by using the redis caching and message broker mechanisms
+||-------------------------------------------------------------------------------------------------------------------||
+
+
+HOW CAN I USE IT
+
+You need an active redis server
+
+To start the twisted chat server:
 open a terminal,
 go to the code folder,
-type: danchat.py
+type: dispochat.py
 
-Two demons will start:
-1) the one listening to port 9000 that implements the websocket protocol,
-2) (optional): a server web listening to port 8080, which root will be the current folder
+A demon implementing the websocket protocol will start listening to port 9000
+
+Use the javascript/html5 client named index.html
+||-------------------------------------------------------------------------------------------------------------------||
 
 
-
+FIXES AND NEXT STEPS
 
 Fix:
-- gestire failure redis
-- gestire failure dei deferred
+- handle redis failures
+- handle deferreds failures
 
-Prossime aggiunte:
-- aggiungere un load balancer tramite txLoadBalancer
+Next steps:
+- add a load balancer with txLoadBalancer
+||-------------------------------------------------------------------------------------------------------------------||
+
